@@ -241,3 +241,52 @@ def chat_patient(patient: ChatRequest):
     response_dict = json.loads(response_text)
     agent_response = AgentResponse(**response_dict)
     return agent_response
+
+@app.get('/analyze/{patient_id}')
+def without_symtoms(patient_id:str):
+    data = load_data()
+
+    if patient_id not in data:
+        raise HTTPException(status_code=404, detail='Patient not found')
+
+    patient_data = data[patient_id]
+    bmi = patient_data['bmi']
+    verdict = patient_data['verdict']
+    allergies = patient_data.get('allergy') or []
+
+    query = f"{bmi} , {verdict} patient {' '.join(allergies)} possible causes"
+    search_results = tavily.search(query)
+
+    prompt = f"""
+                You are a medical assistant. Analyze this patient data and return response in JSON format only.
+
+                Patient Data:
+                - Verdict: {verdict}
+                - Allergies: {allergies}
+                - BMI: {patient_data['bmi']}
+
+
+                Web Search Results: {search_results}
+
+                Return ONLY this JSON structure, nothing else:
+                {{
+                    "risk_level": "High/Medium/Low",
+                    "possible_cause": "...",
+                    "recommendation": "...",
+                    "summary": "...",
+                    "source": ["url1", "url2"]
+                }}
+"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    response_text = response.choices[0].message.content
+    response_text = response_text.strip().strip("```json").strip("```").strip()
+    response_dict = json.loads(response_text)
+    agent_response = AgentResponse(**response_dict)
+    return agent_response

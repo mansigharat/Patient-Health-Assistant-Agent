@@ -3,7 +3,7 @@ import requests
 
 BASE_URL = st.sidebar.text_input("FastAPI base URL", value="http://127.0.0.1:8000")
 
-st.set_page_config(page_title="Patient Management System", layout="wide")
+st.set_page_config(page_title="Patient Health Assistant Agent", layout="wide")
 st.title("Patient Management System")
 
 page = st.sidebar.radio(
