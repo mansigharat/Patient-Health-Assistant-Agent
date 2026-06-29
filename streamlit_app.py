@@ -1,15 +1,16 @@
 import streamlit as st
 import requests
 
+st.set_page_config(page_title="Patient Health Assistant Agent", layout="wide")
+
 BASE_URL = st.sidebar.text_input("FastAPI base URL", value="http://127.0.0.1:8000")
 
-st.set_page_config(page_title="Patient Health Assistant Agent", layout="wide")
-st.title("Patient Management System")
+st.title("Patient Health Assistant Agent")
 
 page = st.sidebar.radio(
     "Go to",
     ["View All", "View Single Patient", "Sort Patients", "Create Patient",
-     "Update Patient", "Delete Patient", "Symptom Checker"]
+     "Update Patient", "Delete Patient", "Symptom Checker", "Health Analyzer"]
 )
 
 
@@ -47,6 +48,20 @@ def delete(path):
     except requests.exceptions.ConnectionError:
         st.error(f"Can't reach {BASE_URL}. Is the FastAPI server running?")
         return None
+
+
+def show_agent_response(result):
+    risk = result.get("risk_level", "Unknown")
+    color = {"High": "red", "Medium": "orange", "Low": "green"}.get(risk, "gray")
+    st.markdown(f"**Risk Level:** :{color}[{risk}]")
+    st.markdown(f"**Possible Cause:** {result.get('possible_cause', '-')}")
+    st.markdown(f"**Recommendation:** {result.get('recommendation', '-')}")
+    st.markdown(f"**Summary:** {result.get('summary', '-')}")
+    sources = result.get("source", [])
+    if sources:
+        st.markdown("**Sources:**")
+        for s in sources:
+            st.markdown(f"- {s}")
 
 
 if page == "View All":
@@ -206,27 +221,34 @@ elif page == "Delete Patient":
 
 elif page == "Symptom Checker":
     st.header("Symptom Checker")
-    patient_id = st.text_input("Patient ID", placeholder="P1001")
+    st.caption("Describe your symptoms and the agent will analyze your health data and search the web for insights.")
+    patient_id = st.text_input("Patient ID", placeholder="P001")
     symptoms = st.text_area("Symptoms", placeholder="fever, headache, fatigue")
 
     if st.button("Analyze") and patient_id and symptoms:
-        with st.spinner("Running search and asking the model..."):
+        with st.spinner("Searching web and analyzing..."):
             r = post("/chat", {"id": patient_id, "symptoms": symptoms})
         if r is not None:
             if r.status_code == 200:
-                result = r.json()
-                risk = result.get("risk_level", "Unknown")
-                color = {"High": "red", "Medium": "orange", "Low": "green"}.get(risk, "gray")
-                st.markdown(f"**Risk level:** :{color}[{risk}]")
-                st.markdown(f"**Possible cause:** {result.get('possible_cause', '-')}")
-                st.markdown(f"**Recommendation:** {result.get('recommendation', '-')}")
-                st.markdown(f"**Summary:** {result.get('summary', '-')}")
-                sources = result.get("source", [])
-                if sources:
-                    st.markdown("**Sources:**")
-                    for s in sources:
-                        st.markdown(f"- {s}")
+                show_agent_response(r.json())
             elif r.status_code == 400:
                 st.error(r.json().get("detail", "Patient not found."))
+            else:
+                st.error(f"Request failed: {r.status_code} - {r.text}")
+
+
+elif page == "Health Analyzer":
+    st.header("Health Analyzer")
+    st.caption("No symptoms needed. The agent proactively checks patient vitals, BMI, and allergies and flags any risks.")
+    patient_id = st.text_input("Patient ID", placeholder="P001")
+
+    if st.button("Run Analysis") and patient_id:
+        with st.spinner("Analyzing patient health data..."):
+            r = get(f"/analyze/{patient_id}")
+        if r is not None:
+            if r.status_code == 200:
+                show_agent_response(r.json())
+            elif r.status_code == 404:
+                st.error("Patient not found.")
             else:
                 st.error(f"Request failed: {r.status_code} - {r.text}")
