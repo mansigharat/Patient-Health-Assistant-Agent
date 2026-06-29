@@ -9,15 +9,12 @@ from groq import Groq
 from tavily import TavilyClient
 
 load_dotenv()
-
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 tavily = TavilyClient(api_key=TAVILY_API_KEY)
-
 client = Groq(api_key=GROQ_API_KEY)
 
 app = FastAPI()
-
 
 class Patient(BaseModel):
 
@@ -39,7 +36,6 @@ class Patient(BaseModel):
     @computed_field
     @property
     def verdict(self) -> str:
-        # BUG FIXED: previously 25-30 was lumped in with 'Normal'. It's Overweight.
         if self.bmi < 18.5:
             return 'Underweight'
         elif self.bmi < 25:
@@ -48,7 +44,6 @@ class Patient(BaseModel):
             return 'Overweight'
         else:
             return 'Obese'
-
 
 class PatientUpdate(BaseModel):
 
@@ -59,11 +54,9 @@ class PatientUpdate(BaseModel):
     height: Annotated[Optional[float], Field(default=None, gt=0)]
     weight: Annotated[Optional[float], Field(default=None, gt=0)]
 
-
 class ChatRequest(BaseModel):
     id: str
     symptoms: str
-
 
 class AgentResponse(BaseModel):
     risk_level: Literal['High', "Medium", 'Low']
@@ -72,22 +65,18 @@ class AgentResponse(BaseModel):
     summary: str
     source: List[str]
 
-
 def load_data():
     with open("patients.json", "r") as f:
         data = json.load(f)
     return data
 
-
 def save_data(data):
     with open("patients.json", 'w') as f:
         json.dump(data, f)
 
-
 @app.get("/")
 def hello():
     return {"message": "Patient Management System API"}
-
 
 @app.get("/about")
 def about():
@@ -95,14 +84,11 @@ def about():
         "message": "A fully functional API to manage your patient records"
     }
 
-
 @app.get("/view")
 def view():
     data = load_data()
     return data
 
-
-# Path Parameter
 @app.get("/patient/{patient_id}")
 def view_patient(
     patient_id: str = Path(
@@ -121,8 +107,6 @@ def view_patient(
         detail="Patient not found"
     )
 
-
-# Query Parameter
 @app.get("/sort")
 def sort_patients(
     sort_by: str = Query(
@@ -160,24 +144,19 @@ def sort_patients(
 
     return sorted_data
 
-
 @app.post('/create')
 def create_patient(patient: Patient):
-    # load existing data
+
     data = load_data()
 
-    # check new patient if that already exists or not
     if patient.id in data:
         raise HTTPException(status_code=400, detail='Patient already exists')
 
-    # new patient add to the database
     data[patient.id] = patient.model_dump(exclude={'id'})  # convert pydantic object into dictionary
 
-    # save into json file
     save_data(data)
 
     return JSONResponse(status_code=201, content={'message': 'Patient Created Successfully'})
-
 
 @app.put('/edit/{patient_id}')
 def update_patient(patient_id: str, patient_update: PatientUpdate):
@@ -194,15 +173,12 @@ def update_patient(patient_id: str, patient_update: PatientUpdate):
 
     existing_patient_info['id'] = patient_id
     patient_pydantic_obj = Patient(**existing_patient_info)
-    # BUG FIXED: exclude='id' was a string, pydantic iterated over its
-    # characters ('i', 'd') instead of excluding the 'id' field. Needs a set.
     existing_patient_info = patient_pydantic_obj.model_dump(exclude={'id'})
 
     data[patient_id] = existing_patient_info
 
     save_data(data)
     return JSONResponse(status_code=200, content={'message': 'patient updated'})
-
 
 @app.delete('/delete/{patient_id}')
 def delete_patient(patient_id: str):
@@ -216,7 +192,6 @@ def delete_patient(patient_id: str):
     save_data(data)
     return JSONResponse(status_code=200, content={'message': 'Patient Deleted'})
 
-
 @app.post('/chat')
 def chat_patient(patient: ChatRequest):
     data = load_data()
@@ -226,8 +201,6 @@ def chat_patient(patient: ChatRequest):
 
     patient_data = data[patient.id]
     verdict = patient_data['verdict']
-    # BUG FIXED: model field is 'allergy', not 'allergies'. This was a guaranteed
-    # KeyError on every call. Also guard against None since allergy is optional.
     allergies = patient_data.get('allergy') or []
     symptoms = patient.symptoms
 
@@ -268,8 +241,3 @@ def chat_patient(patient: ChatRequest):
     response_dict = json.loads(response_text)
     agent_response = AgentResponse(**response_dict)
     return agent_response
-
-# PUT = updating
-# GET = retrieve
-# POST = Creating
-# DELETE = deletion
